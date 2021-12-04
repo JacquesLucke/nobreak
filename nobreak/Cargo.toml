@@ -1,0 +1,12 @@
+[package]
+name = "nobreak"
+version = "0.1.0"
+authors = ["Jacques Lucke <mail@jlucke.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocket = "0.5.0-rc.1"
+anyhow = "1.0.51"
+tokio = "1.14.0"
