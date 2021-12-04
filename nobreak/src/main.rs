@@ -104,6 +104,11 @@ async fn main() -> anyhow::Result<()> {
     let directory_path = std::path::Path::new(matches.value_of("directory").unwrap()).to_owned();
     let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
 
+    if !directory_path.exists() || !directory_path.is_dir() {
+        println!("Directory does not exist: {}", &directory_path.display());
+        return Ok(());
+    }
+
     rocket::build()
         .manage(NobreakState {
             directory: directory_path,
