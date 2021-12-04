@@ -21,8 +21,8 @@ struct IndexResponseMessage {
 fn handle_index() -> String {
     let res = IndexResponseMessage {
         mode: OperationMode::Update,
-        log: "/log",
-        get: "/get",
+        log: "/log/",
+        get: "/get/",
     };
     serde_json::to_string(&res).unwrap()
 }
