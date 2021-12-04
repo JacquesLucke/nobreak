@@ -1,10 +1,24 @@
+#[derive(serde::Serialize)]
+struct IndexResponseMessage {
+    log: &'static str,
+}
+
 #[rocket::get("/")]
-fn index() -> &'static str {
-    "Hello, world!"
+fn handle_index() -> String {
+    let res = IndexResponseMessage { log: "/log" };
+    serde_json::to_string(&res).unwrap()
+}
+
+#[rocket::post("/log/<key>", data = "<msg>")]
+fn handle_log(key: &str, msg: &[u8]) {
+    println!("Key: {}", &key);
+    for v in msg {
+        println!("Value: {}", &v);
+    }
 }
 
 #[rocket::post("/_shutdown")]
-fn do_shutdown(shutdown: rocket::Shutdown) -> &'static str {
+fn handle_shutdown(shutdown: rocket::Shutdown) -> &'static str {
     shutdown.notify();
     "Shutdown"
 }
@@ -44,7 +58,10 @@ async fn main() -> anyhow::Result<()> {
     let script_path = matches.value_of("file").unwrap().to_owned();
 
     rocket::build()
-        .mount("/", rocket::routes![index, do_shutdown])
+        .mount(
+            "/",
+            rocket::routes![handle_index, handle_log, handle_shutdown],
+        )
         .attach(rocket::fairing::AdHoc::on_liftoff(
             "Start Script",
             move |rocket| {
