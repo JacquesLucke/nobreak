@@ -1,5 +1,12 @@
 #[derive(serde::Serialize)]
+enum OperationMode {
+    Update,
+    // Check,
+}
+
+#[derive(serde::Serialize)]
 struct IndexResponseMessage {
+    mode: OperationMode,
     log: &'static str,
     get: &'static str,
 }
@@ -7,6 +14,7 @@ struct IndexResponseMessage {
 #[rocket::get("/")]
 fn handle_index() -> String {
     let res = IndexResponseMessage {
+        mode: OperationMode::Update,
         log: "/log",
         get: "/get",
     };

@@ -6,6 +6,7 @@ import urllib.parse
 
 server_url = os.environ["NOBREAK_SERVER_URL"]
 index_res = requests.get(server_url).json()
+print(index_res)
 
 log_url = urllib.parse.urljoin(server_url, index_res["log"])
 get_url = urllib.parse.urljoin(server_url, index_res["get"])
