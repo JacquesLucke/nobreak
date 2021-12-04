@@ -13,6 +13,7 @@ fn do_shutdown(shutdown: rocket::Shutdown) -> &'static str {
 async fn execute_script(script_path: &str, server_url: reqwest::Url) -> anyhow::Result<()> {
     tokio::process::Command::new("sh")
         .arg(script_path)
+        .env("NOBREAK_SERVER_URL", server_url.to_string())
         .spawn()
         .expect("failed to spawn")
         .wait()

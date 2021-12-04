@@ -1,1 +1,1 @@
-echo Hello this is a test
+python $(dirname "$0")/my_test.py
