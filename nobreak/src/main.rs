@@ -41,7 +41,10 @@ fn handle_shutdown(shutdown: rocket::Shutdown) -> &'static str {
 }
 
 #[tokio::main]
-async fn execute_script(script_path: &str, server_url: reqwest::Url) -> anyhow::Result<()> {
+async fn execute_script(
+    script_path: &std::path::Path,
+    server_url: reqwest::Url,
+) -> anyhow::Result<()> {
     tokio::process::Command::new("sh")
         .arg(script_path)
         .env("NOBREAK_SERVER_URL", server_url.to_string())
@@ -55,7 +58,7 @@ async fn execute_script(script_path: &str, server_url: reqwest::Url) -> anyhow::
     Ok(())
 }
 
-fn on_liftoff(script_path: String, rocket: &rocket::Rocket<rocket::Orbit>) {
+fn on_liftoff(script_path: std::path::PathBuf, rocket: &rocket::Rocket<rocket::Orbit>) {
     let address = rocket.config().address;
     let port = rocket.config().port;
     let mut server_url =
@@ -70,9 +73,21 @@ fn on_liftoff(script_path: String, rocket: &rocket::Rocket<rocket::Orbit>) {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let matches = clap::App::new("nobreak")
-        .arg(clap::Arg::with_name("file").required(true).index(1))
+        .arg(
+            clap::Arg::with_name("directory")
+                .help("Directory where the recorded data is stored.")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            clap::Arg::with_name("script")
+                .help("Shell script that runs the regression test suite")
+                .required(true)
+                .index(2),
+        )
         .get_matches();
-    let script_path = matches.value_of("file").unwrap().to_owned();
+    let directory_path = std::path::Path::new(matches.value_of("directory").unwrap()).to_owned();
+    let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
 
     rocket::build()
         .mount(
