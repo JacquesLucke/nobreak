@@ -1,11 +1,15 @@
 #[derive(serde::Serialize)]
 struct IndexResponseMessage {
     log: &'static str,
+    get: &'static str,
 }
 
 #[rocket::get("/")]
 fn handle_index() -> String {
-    let res = IndexResponseMessage { log: "/log" };
+    let res = IndexResponseMessage {
+        log: "/log",
+        get: "/get",
+    };
     serde_json::to_string(&res).unwrap()
 }
 
@@ -15,6 +19,11 @@ fn handle_log(key: &str, msg: &[u8]) {
     for v in msg {
         println!("Value: {}", &v);
     }
+}
+
+#[rocket::get("/get/<key>")]
+fn handle_get(key: &str) -> &'static [u8] {
+    &[70, 71, 72, 73]
 }
 
 #[rocket::post("/_shutdown")]
@@ -60,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     rocket::build()
         .mount(
             "/",
-            rocket::routes![handle_index, handle_log, handle_shutdown],
+            rocket::routes![handle_index, handle_log, handle_get, handle_shutdown],
         )
         .attach(rocket::fairing::AdHoc::on_liftoff(
             "Start Script",
