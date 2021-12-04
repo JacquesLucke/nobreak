@@ -1,7 +1,13 @@
+use tokio::io::AsyncWriteExt;
+
 #[derive(serde::Serialize)]
 enum OperationMode {
     Update,
     // Check,
+}
+
+struct NobreakState {
+    directory: std::path::PathBuf,
 }
 
 #[derive(serde::Serialize)]
@@ -22,15 +28,24 @@ fn handle_index() -> String {
 }
 
 #[rocket::post("/log/<key>", data = "<msg>")]
-fn handle_log(key: &str, msg: &[u8]) {
+async fn handle_log(key: &str, msg: &[u8], state: &rocket::State<NobreakState>) -> String {
     println!("Key: {}", &key);
     for v in msg {
         println!("Value: {}", &v);
     }
+    let path = state.directory.join(key).with_extension("txt");
+    let mut file = match tokio::fs::File::create(path).await {
+        Ok(file) => file,
+        Err(_) => return "Could not create file.".to_owned(),
+    };
+    match file.write_all(msg).await {
+        Ok(_) => return "Success.".to_owned(),
+        Err(_) => return "Could not write to file.".to_owned(),
+    }
 }
 
-#[rocket::get("/get/<key>")]
-fn handle_get(key: &str) -> &'static [u8] {
+#[rocket::get("/get/<_key>")]
+fn handle_get(_key: &str) -> &'static [u8] {
     &[70, 71, 72, 73]
 }
 
@@ -90,6 +105,9 @@ async fn main() -> anyhow::Result<()> {
     let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
 
     rocket::build()
+        .manage(NobreakState {
+            directory: directory_path,
+        })
         .mount(
             "/",
             rocket::routes![handle_index, handle_log, handle_get, handle_shutdown],
