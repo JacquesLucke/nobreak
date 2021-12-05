@@ -7,9 +7,22 @@ enum OperationMode {
     Check,
 }
 
+#[derive(Clone, Debug)]
+struct FailInfo {
+    key: String,
+    msg: String,
+}
+
+impl std::fmt::Display for FailInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "<{}: {}>", self.key, self.msg)
+    }
+}
+
 struct NobreakState {
     mode: OperationMode,
     directory: std::path::PathBuf,
+    fails: std::sync::Arc<std::sync::Mutex<Vec<FailInfo>>>,
 }
 
 #[derive(serde::Serialize)]
@@ -17,6 +30,7 @@ struct IndexResponseMessage {
     mode: OperationMode,
     log: &'static str,
     get: &'static str,
+    fail: &'static str,
 }
 
 #[rocket::get("/")]
@@ -25,6 +39,7 @@ fn handle_index(state: &rocket::State<NobreakState>) -> String {
         mode: state.mode,
         log: "/log/",
         get: "/get/",
+        fail: "/fail/",
     };
     serde_json::to_string(&res).unwrap()
 }
@@ -43,6 +58,15 @@ async fn handle_get(key: &str, state: &rocket::State<NobreakState>) -> Vec<u8> {
         Ok(vec) => vec,
         Err(_) => vec![],
     }
+}
+
+#[rocket::post("/fail/<key>", data = "<msg>")]
+async fn handle_fail(key: &str, msg: &str, state: &rocket::State<NobreakState>) -> &'static str {
+    state.fails.lock().unwrap().push(FailInfo {
+        key: key.to_owned(),
+        msg: msg.to_owned(),
+    });
+    "."
 }
 
 #[rocket::post("/_shutdown")]
@@ -141,14 +165,23 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let fails = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+
     rocket::build()
         .manage(NobreakState {
             mode: operation_mode,
             directory: directory_path,
+            fails: fails.clone(),
         })
         .mount(
             "/",
-            rocket::routes![handle_index, handle_log, handle_get, handle_shutdown],
+            rocket::routes![
+                handle_index,
+                handle_log,
+                handle_get,
+                handle_fail,
+                handle_shutdown
+            ],
         )
         .attach(rocket::fairing::AdHoc::on_liftoff(
             "Start Script",
@@ -160,6 +193,10 @@ async fn main() -> anyhow::Result<()> {
         ))
         .launch()
         .await?;
+
+    for fail_info in fails.lock().unwrap().iter() {
+        println!("Failed: {}", fail_info);
+    }
     println!("Finished nobreak.");
     Ok(())
 }

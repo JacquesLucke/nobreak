@@ -25,6 +25,7 @@ class NobreakConnection:
         }[data["mode"]]
         self._log_url = urllib.parse.urljoin(server_url, data["log"])
         self._get_url = urllib.parse.urljoin(server_url, data["get"])
+        self._fail_url = urllib.parse.urljoin(server_url, data["fail"])
 
     @staticmethod
     def from_environment():
@@ -43,6 +44,11 @@ class NobreakConnection:
         get_key_url = urllib.parse.urljoin(self._get_url, key_str)
         return requests.get(get_key_url).content
 
+    def fail(self, key: list[str], msg: str):
+        key_str = str(key)
+        fail_key_url = urllib.parse.urljoin(self._fail_url, key_str)
+        requests.post(fail_key_url, data=msg.encode())
+
 class NobreakClient:
     def __init__(self, connection: NobreakConnection, parent_key: list[str] | None = None):
         self.connection = connection
@@ -60,6 +66,7 @@ class NobreakClient:
                 print("Equal:", key, value)
             else:
                 print("Not Equal:", key, value, stored_value)
+                self.connection.fail(full_key, f"{value} != {stored_value}")
         else:
             raise RuntimeError("Unknown nobreak operation mode.")
 
