@@ -1,12 +1,14 @@
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone, Copy)]
 enum OperationMode {
     Update,
-    // Check,
+    Check,
 }
 
 struct NobreakState {
+    mode: OperationMode,
     directory: std::path::PathBuf,
 }
 
@@ -18,9 +20,9 @@ struct IndexResponseMessage {
 }
 
 #[rocket::get("/")]
-fn handle_index() -> String {
+fn handle_index(state: &rocket::State<NobreakState>) -> String {
     let res = IndexResponseMessage {
-        mode: OperationMode::Update,
+        mode: state.mode,
         log: "/log/",
         get: "/get/",
     };
@@ -29,30 +31,45 @@ fn handle_index() -> String {
 
 #[rocket::post("/log/<key>", data = "<msg>")]
 async fn handle_log(key: &str, msg: &[u8], state: &rocket::State<NobreakState>) -> String {
-    println!("Key: {}", &key);
-    for v in msg {
-        println!("Value: {}", &v);
-    }
-    let path = state.directory.join(key).with_extension("txt");
-    let mut file = match tokio::fs::File::create(path).await {
-        Ok(file) => file,
-        Err(_) => return "Could not create file.".to_owned(),
-    };
-    match file.write_all(msg).await {
-        Ok(_) => return "Success.".to_owned(),
-        Err(_) => return "Could not write to file.".to_owned(),
+    match store_value_for_key(key, msg, state).await {
+        Ok(_) => "Success.".to_owned(),
+        Err(_) => "Failed.".to_owned(),
     }
 }
 
-#[rocket::get("/get/<_key>")]
-fn handle_get(_key: &str) -> &'static [u8] {
-    &[70, 71, 72, 73]
+#[rocket::get("/get/<key>")]
+async fn handle_get(key: &str, state: &rocket::State<NobreakState>) -> Vec<u8> {
+    match load_value_for_key(key, state).await {
+        Ok(vec) => vec,
+        Err(_) => vec![],
+    }
 }
 
 #[rocket::post("/_shutdown")]
 fn handle_shutdown(shutdown: rocket::Shutdown) -> &'static str {
     shutdown.notify();
     "Shutdown"
+}
+
+fn get_path_for_key(key: &str, state: &NobreakState) -> std::path::PathBuf {
+    state.directory.join(key).with_extension("txt")
+}
+
+async fn load_value_for_key(key: &str, state: &NobreakState) -> anyhow::Result<Vec<u8>> {
+    let path = get_path_for_key(key, state);
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut contents = vec![];
+    file.read_buf(&mut contents).await?;
+    Ok(contents)
+}
+
+async fn store_value_for_key(key: &str, value: &[u8], state: &NobreakState) -> anyhow::Result<()> {
+    let path = get_path_for_key(key, state);
+    tokio::fs::File::create(path)
+        .await?
+        .write_all(value)
+        .await?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -100,7 +117,22 @@ async fn main() -> anyhow::Result<()> {
                 .required(true)
                 .index(2),
         )
+        .subcommand(clap::SubCommand::with_name("check"))
+        .subcommand(clap::SubCommand::with_name("update"))
         .get_matches();
+
+    let operation_mode = match matches.subcommand_name() {
+        None => {
+            println!("Use a subcommand");
+            return Ok(());
+        }
+        Some(name) => match name {
+            "check" => OperationMode::Check,
+            "update" => OperationMode::Update,
+            _ => panic!(),
+        },
+    };
+
     let directory_path = std::path::Path::new(matches.value_of("directory").unwrap()).to_owned();
     let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
 
@@ -111,6 +143,7 @@ async fn main() -> anyhow::Result<()> {
 
     rocket::build()
         .manage(NobreakState {
+            mode: operation_mode,
             directory: directory_path,
         })
         .mount(
