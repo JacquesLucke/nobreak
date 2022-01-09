@@ -1,3 +1,4 @@
+use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
@@ -126,8 +127,47 @@ fn on_liftoff(script_path: std::path::PathBuf, rocket: &rocket::Rocket<rocket::O
     });
 }
 
+fn encode_full_key(full_key: &[String]) -> Vec<u8> {
+    let mut buffer = vec![];
+    WriteBytesExt::write_u32::<NetworkEndian>(&mut buffer, full_key.len() as u32).unwrap();
+    for key in full_key {
+        WriteBytesExt::write_u32::<NetworkEndian>(&mut buffer, key.len() as u32).unwrap();
+        buffer.extend(key.as_bytes());
+    }
+    buffer
+}
+
+fn decode_full_key(buffer: &[u8]) -> Vec<String> {
+    let mut full_key = vec![];
+    let mut cursor = std::io::Cursor::new(buffer);
+    let key_amount = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor).unwrap();
+    for _ in 0..key_amount {
+        let key_length = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor).unwrap();
+        let mut key_bytes: Vec<u8> = vec![0; key_length as usize];
+        std::io::Read::read_exact(&mut cursor, &mut key_bytes).unwrap();
+        let key = String::from_utf8(key_bytes).unwrap();
+        full_key.push(key);
+    }
+    return full_key;
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let full_key: Vec<String> = vec!["test", "a", "b", "c"]
+        .iter()
+        .map(|&s| s.to_owned())
+        .collect();
+    let encoded_full_key = encode_full_key(&full_key);
+    for b in encoded_full_key.iter() {
+        print!("{} ", b);
+    }
+    println!();
+    let decoded_full_key = decode_full_key(&encoded_full_key);
+    for key in decoded_full_key.iter() {
+        print!("{}, ", key);
+    }
+    println!();
+
     let matches = clap::App::new("nobreak")
         .arg(
             clap::Arg::with_name("directory")
