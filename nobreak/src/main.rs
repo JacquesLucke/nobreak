@@ -26,50 +26,6 @@ struct NobreakState {
     fails: std::sync::Arc<std::sync::Mutex<Vec<FailInfo>>>,
 }
 
-#[derive(serde::Serialize)]
-struct IndexResponseMessage {
-    mode: OperationMode,
-    log: &'static str,
-    get: &'static str,
-    fail: &'static str,
-}
-
-#[rocket::get("/")]
-fn handle_index(state: &rocket::State<NobreakState>) -> String {
-    let res = IndexResponseMessage {
-        mode: state.mode,
-        log: "/log/",
-        get: "/get/",
-        fail: "/fail/",
-    };
-    serde_json::to_string(&res).unwrap()
-}
-
-#[rocket::post("/log/<key>", data = "<msg>")]
-async fn handle_log(key: &str, msg: &[u8], state: &rocket::State<NobreakState>) -> String {
-    match store_value_for_key(key, msg, state).await {
-        Ok(_) => "Success.".to_owned(),
-        Err(_) => "Failed.".to_owned(),
-    }
-}
-
-#[rocket::get("/get/<key>")]
-async fn handle_get(key: &str, state: &rocket::State<NobreakState>) -> Vec<u8> {
-    match load_value_for_key(key, state).await {
-        Ok(vec) => vec,
-        Err(_) => vec![],
-    }
-}
-
-#[rocket::post("/fail/<key>", data = "<msg>")]
-async fn handle_fail(key: &str, msg: &str, state: &rocket::State<NobreakState>) -> &'static str {
-    state.fails.lock().unwrap().push(FailInfo {
-        key: key.to_owned(),
-        msg: msg.to_owned(),
-    });
-    "."
-}
-
 #[rocket::post("/_shutdown")]
 fn handle_shutdown(shutdown: rocket::Shutdown) -> &'static str {
     shutdown.notify();
@@ -175,8 +131,31 @@ fn answer_status_request() -> Vec<u8> {
     vec![b'C']
 }
 
+fn key_to_path(key: &Key, state: &NobreakState) -> std::path::PathBuf {
+    let mut path = state.directory.clone();
+    for sub_key in key.sub_keys.iter() {
+        path.push(sub_key);
+    }
+    path.set_extension("txt");
+    path
+}
+
 async fn answer_load_request(request: LoadRequest, state: &NobreakState) -> Vec<u8> {
-    vec![b'D']
+    match handle_load_request(request, state).await {
+        Ok(value) => value,
+        Err(_) => vec![],
+    }
+}
+
+async fn handle_load_request(
+    request: LoadRequest,
+    state: &NobreakState,
+) -> anyhow::Result<Vec<u8>> {
+    let path = key_to_path(&request.key, state);
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut contents = vec![];
+    file.read_buf(&mut contents).await?;
+    Ok(contents)
 }
 
 async fn answer_log_value_request(request: LogValueRequest, state: &NobreakState) -> Vec<u8> {
@@ -190,11 +169,7 @@ async fn handle_log_value_request(
     request: LogValueRequest,
     state: &NobreakState,
 ) -> anyhow::Result<()> {
-    let mut path = state.directory.clone();
-    for sub_key in request.key.sub_keys.iter() {
-        path.push(sub_key);
-    }
-    path.set_extension("txt");
+    let path = key_to_path(&request.key, state);
     let mut builder = tokio::fs::DirBuilder::new();
     builder.recursive(true);
     let parent_path = path
@@ -232,27 +207,6 @@ async fn handle_api(msg: &[u8], state: &rocket::State<NobreakState>) -> Vec<u8> 
     }
 }
 
-fn get_path_for_key(key: &str, state: &NobreakState) -> std::path::PathBuf {
-    state.directory.join(key).with_extension("txt")
-}
-
-async fn load_value_for_key(key: &str, state: &NobreakState) -> anyhow::Result<Vec<u8>> {
-    let path = get_path_for_key(key, state);
-    let mut file = tokio::fs::File::open(path).await?;
-    let mut contents = vec![];
-    file.read_buf(&mut contents).await?;
-    Ok(contents)
-}
-
-async fn store_value_for_key(key: &str, value: &[u8], state: &NobreakState) -> anyhow::Result<()> {
-    let path = get_path_for_key(key, state);
-    tokio::fs::File::create(path)
-        .await?
-        .write_all(value)
-        .await?;
-    Ok(())
-}
-
 #[tokio::main]
 async fn execute_script(
     script_path: &std::path::Path,
@@ -281,30 +235,6 @@ fn on_liftoff(script_path: std::path::PathBuf, rocket: &rocket::Rocket<rocket::O
         execute_script(&script_path, server_url)?;
         Ok(())
     });
-}
-
-fn encode_full_key(full_key: &[String]) -> Vec<u8> {
-    let mut buffer = vec![];
-    WriteBytesExt::write_u32::<NetworkEndian>(&mut buffer, full_key.len() as u32).unwrap();
-    for key in full_key {
-        WriteBytesExt::write_u32::<NetworkEndian>(&mut buffer, key.len() as u32).unwrap();
-        buffer.extend(key.as_bytes());
-    }
-    buffer
-}
-
-fn decode_full_key(buffer: &[u8]) -> Vec<String> {
-    let mut full_key = vec![];
-    let mut cursor = std::io::Cursor::new(buffer);
-    let key_amount = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor).unwrap();
-    for _ in 0..key_amount {
-        let key_length = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor).unwrap();
-        let mut key_bytes: Vec<u8> = vec![0; key_length as usize];
-        std::io::Read::read_exact(&mut cursor, &mut key_bytes).unwrap();
-        let key = String::from_utf8(key_bytes).unwrap();
-        full_key.push(key);
-    }
-    return full_key;
 }
 
 #[tokio::main]
@@ -369,17 +299,7 @@ async fn main() -> anyhow::Result<()> {
             directory: std::path::Path::new("/home/jacques/Documents/nobreak/testing").to_owned(),
             fails: fails.clone(),
         })
-        .mount(
-            "/",
-            rocket::routes![
-                handle_index,
-                handle_log,
-                handle_get,
-                handle_fail,
-                handle_shutdown,
-                handle_api,
-            ],
-        )
+        .mount("/", rocket::routes![handle_shutdown, handle_api,])
         // .attach(rocket::fairing::AdHoc::on_liftoff(
         //     "Start Script",
         //     move |rocket| {

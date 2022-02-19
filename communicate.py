@@ -94,10 +94,10 @@ def encode_message__log_fail_impl(key: Key, message: str):
     yield encode_str(message)
 
 
-# print(requests.get(
-#     "http://127.0.0.1:8000/api",
-#     data=encode_message__load(["test", "A", "BC"])
-# ).content)
+print(requests.get(
+    "http://127.0.0.1:8000/api",
+    data=encode_message__load(["test", "A", "lala"])
+).content)
 
 # print(requests.get(
 #     "http://127.0.0.1:8000/api",
