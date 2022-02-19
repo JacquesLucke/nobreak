@@ -171,14 +171,65 @@ fn decode_str(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<String>
     Ok(String::from_utf8(bytes)?)
 }
 
+fn answer_status_request() -> Vec<u8> {
+    vec![b'C']
+}
+
+async fn answer_load_request(request: LoadRequest, state: &NobreakState) -> Vec<u8> {
+    vec![b'D']
+}
+
+async fn answer_log_value_request(request: LogValueRequest, state: &NobreakState) -> Vec<u8> {
+    match handle_log_value_request(request, state).await {
+        Ok(_) => vec![b'E'],
+        Err(_) => vec![b'Z'],
+    }
+}
+
+async fn handle_log_value_request(
+    request: LogValueRequest,
+    state: &NobreakState,
+) -> anyhow::Result<()> {
+    let mut path = state.directory.clone();
+    for sub_key in request.key.sub_keys.iter() {
+        path.push(sub_key);
+    }
+    path.set_extension("txt");
+    let mut builder = tokio::fs::DirBuilder::new();
+    builder.recursive(true);
+    let parent_path = path
+        .parent()
+        .ok_or(anyhow::anyhow!("error creating directory"))?;
+    builder.create(parent_path).await?;
+    tokio::fs::File::create(&path)
+        .await?
+        .write_all(&request.value)
+        .await?;
+    Ok(())
+}
+
+async fn answer_log_success_request(request: LogSuccessRequest) -> Vec<u8> {
+    vec![b'F']
+}
+
+async fn answer_log_fail_request(request: LogFailRequest) -> Vec<u8> {
+    vec![b'G']
+}
+
 #[rocket::get("/api", data = "<msg>")]
-async fn handle_api(msg: &[u8], _state: &rocket::State<NobreakState>) -> Vec<u8> {
+async fn handle_api(msg: &[u8], state: &rocket::State<NobreakState>) -> Vec<u8> {
     let request = match decode_request(msg) {
         Ok(request) => request,
         _ => return vec![b'A'],
     };
     println!("{:?}", request);
-    vec![b'B']
+    match request.content {
+        RequestType::Status(_) => answer_status_request(),
+        RequestType::Load(request) => answer_load_request(request, state).await,
+        RequestType::LogValue(request) => answer_log_value_request(request, state).await,
+        RequestType::LogSuccess(request) => answer_log_success_request(request).await,
+        RequestType::LogFail(request) => answer_log_fail_request(request).await,
+    }
 }
 
 fn get_path_for_key(key: &str, state: &NobreakState) -> std::path::PathBuf {
@@ -315,7 +366,7 @@ async fn main() -> anyhow::Result<()> {
     rocket::build()
         .manage(NobreakState {
             mode: OperationMode::Check,
-            directory: std::path::Path::new("").to_owned(),
+            directory: std::path::Path::new("/home/jacques/Documents/nobreak/testing").to_owned(),
             fails: fails.clone(),
         })
         .mount(
