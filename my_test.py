@@ -6,74 +6,62 @@ import requests
 from pprint import pprint
 import urllib.parse
 import enum
+from communicate import (
+    encode_message__status,
+    encode_message__load,
+    encode_message__log_value,
+    encode_message__log_success,
+    encode_message__log_fail,
+)
 
 class NobreakOperationMode(enum.Enum):
     UPDATE = enum.auto()
     CHECK = enum.auto()
+
 class NobreakConnection:
     def __init__(self, server_url: str):
         self._server_url = server_url
 
-        response = requests.get(server_url)
+        response = requests.get(server_url, data=encode_message__status())
         if response.status_code != 200:
             raise ConnectionError("Could not connect to nobreak server.")
-
-        data = response.json()
-        self.operation_mode = {
-            "Update": NobreakOperationMode.UPDATE,
-            "Check": NobreakOperationMode.CHECK,
-        }[data["mode"]]
-        self._log_url = urllib.parse.urljoin(server_url, data["log"])
-        self._get_url = urllib.parse.urljoin(server_url, data["get"])
-        self._fail_url = urllib.parse.urljoin(server_url, data["fail"])
-
-    @staticmethod
-    def from_environment():
-        server_url: str = os.environ["NOBREAK_SERVER_URL"]
-        return NobreakConnection(server_url)
+        self.operation_mode = NobreakOperationMode.UPDATE
 
     def log(self, key: list[str], value: bytes):
-        key_str = str(key)
-        print(self._log_url)
-        log_key_url = urllib.parse.urljoin(self._log_url, key_str)
-        print(log_key_url)
-        requests.post(log_key_url, data=value)
+        requests.get(self._server_url, data=encode_message__log_value(key, value))
 
     def get(self, key: list[str]) -> bytes | None:
-        key_str = str(key)
-        get_key_url = urllib.parse.urljoin(self._get_url, key_str)
-        return requests.get(get_key_url).content
+        response = requests.get(self._server_url, data=encode_message__load(key))
+        return "test"
 
     def fail(self, key: list[str], msg: str):
-        key_str = str(key)
-        fail_key_url = urllib.parse.urljoin(self._fail_url, key_str)
-        requests.post(fail_key_url, data=msg.encode())
+        requests.get(self._server_url, data=encode_message__log_fail(key, msg))
 
 class NobreakClient:
     def __init__(self, connection: NobreakConnection, parent_key: list[str] | None = None):
         self.connection = connection
         self.parent_key = [] if parent_key is None else parent_key
 
-    def log(self, key: str, value: bytes):
-        full_key = self.parent_key + [key]
+    def log(self, sub_key: str, value: bytes):
+        key = self.parent_key + [sub_key]
         if self.connection.operation_mode == NobreakOperationMode.UPDATE:
-            self.connection.log(full_key, value)
+            self.connection.log(key, value)
         elif self.connection.operation_mode == NobreakOperationMode.CHECK:
-            stored_value = self.connection.get(full_key)
+            stored_value = self.connection.get(key)
             if stored_value is None:
                 print("Value was not stored")
             elif value == stored_value:
-                print("Equal:", key, value)
+                print("Equal:", sub_key, value)
             else:
-                print("Not Equal:", key, value, stored_value)
-                self.connection.fail(full_key, f"{value} != {stored_value}")
+                print("Not Equal:", sub_key, value, stored_value)
+                self.connection.fail(key, f"{value} != {stored_value}")
         else:
             raise RuntimeError("Unknown nobreak operation mode.")
 
-    def sub(self, key: str) -> NobreakClient | None:
-        return NobreakClient(self.connection, self.parent_key + [key])
+    def sub(self, sub_key: str) -> NobreakClient | None:
+        return NobreakClient(self.connection, self.parent_key + [sub_key])
 
-connection = NobreakConnection.from_environment()
+connection = NobreakConnection("http://127.0.0.1:8000/api")
 client = NobreakClient(connection)
 
 client.log("A", b"aa")

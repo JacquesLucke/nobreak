@@ -76,6 +76,111 @@ fn handle_shutdown(shutdown: rocket::Shutdown) -> &'static str {
     "Shutdown"
 }
 
+#[derive(Debug)]
+struct Key {
+    sub_keys: Vec<String>,
+}
+
+#[derive(Debug)]
+struct LoadRequest {
+    key: Key,
+}
+
+#[derive(Debug)]
+struct LogValueRequest {
+    key: Key,
+    value: Vec<u8>,
+}
+
+#[derive(Debug)]
+struct LogSuccessRequest {
+    key: Key,
+}
+
+#[derive(Debug)]
+struct LogFailRequest {
+    key: Key,
+    message: String,
+}
+
+#[derive(Debug)]
+struct StatusRequest {}
+
+#[derive(Debug)]
+enum RequestType {
+    Load(LoadRequest),
+    LogValue(LogValueRequest),
+    LogSuccess(LogSuccessRequest),
+    LogFail(LogFailRequest),
+    Status(StatusRequest),
+}
+
+#[derive(Debug)]
+struct RequestMessage {
+    version: u32,
+    content: RequestType,
+}
+
+fn decode_request(request_buffer: &[u8]) -> anyhow::Result<RequestMessage> {
+    let mut cursor = std::io::Cursor::new(request_buffer);
+    let version = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor)?;
+    let opcode = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor)?;
+    let content = match opcode {
+        0 => RequestType::Status(StatusRequest {}),
+        1 => {
+            let key = decode_key(&mut cursor)?;
+            RequestType::Load(LoadRequest { key })
+        }
+        2 => {
+            let key = decode_key(&mut cursor)?;
+            let value = decode_bytes(&mut cursor)?;
+            RequestType::LogValue(LogValueRequest { key, value })
+        }
+        3 => {
+            let key = decode_key(&mut cursor)?;
+            RequestType::LogSuccess(LogSuccessRequest { key })
+        }
+        4 => {
+            let key = decode_key(&mut cursor)?;
+            let message = decode_str(&mut cursor)?;
+            RequestType::LogFail(LogFailRequest { key, message })
+        }
+        _ => return Err(anyhow::anyhow!("Invalid opcode")),
+    };
+    Ok(RequestMessage { version, content })
+}
+
+fn decode_key(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<Key> {
+    let mut key = Key { sub_keys: vec![] };
+    let amount = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor)?;
+    for _ in 0..amount {
+        key.sub_keys.push(decode_str(&mut cursor)?);
+    }
+    Ok(key)
+}
+
+fn decode_bytes(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<Vec<u8>> {
+    let size = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor)?;
+    let mut buffer = vec![0; size as usize];
+    std::io::Read::read_exact(&mut cursor, &mut buffer)?;
+    Ok(buffer)
+}
+
+fn decode_str(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<String> {
+    let bytes = decode_bytes(&mut cursor)?;
+    Ok(String::from_utf8(bytes)?)
+}
+
+#[rocket::get("/api", data = "<msg>")]
+async fn handle_api(msg: &[u8], _state: &rocket::State<NobreakState>) -> Vec<u8> {
+    let request = match decode_request(msg) {
+        Ok(request) => request,
+        _ => return vec![b'A'],
+    };
+    println!("{:?}", request);
+    vec![b'B']
+}
+
 fn get_path_for_key(key: &str, state: &NobreakState) -> std::path::PathBuf {
     state.directory.join(key).with_extension("txt")
 }
@@ -153,64 +258,64 @@ fn decode_full_key(buffer: &[u8]) -> Vec<String> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let full_key: Vec<String> = vec!["test", "a", "b", "c"]
-        .iter()
-        .map(|&s| s.to_owned())
-        .collect();
-    let encoded_full_key = encode_full_key(&full_key);
-    for b in encoded_full_key.iter() {
-        print!("{} ", b);
-    }
-    println!();
-    let decoded_full_key = decode_full_key(&encoded_full_key);
-    for key in decoded_full_key.iter() {
-        print!("{}, ", key);
-    }
-    println!();
+    // let full_key: Vec<String> = vec!["test", "a", "b", "c"]
+    //     .iter()
+    //     .map(|&s| s.to_owned())
+    //     .collect();
+    // let encoded_full_key = encode_full_key(&full_key);
+    // for b in encoded_full_key.iter() {
+    //     print!("{} ", b);
+    // }
+    // println!();
+    // let decoded_full_key = decode_full_key(&encoded_full_key);
+    // for key in decoded_full_key.iter() {
+    //     print!("{}, ", key);
+    // }
+    // println!();
 
-    let matches = clap::App::new("nobreak")
-        .arg(
-            clap::Arg::with_name("directory")
-                .help("Directory where the recorded data is stored.")
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            clap::Arg::with_name("script")
-                .help("Shell script that runs the regression test suite")
-                .required(true)
-                .index(2),
-        )
-        .subcommand(clap::SubCommand::with_name("check"))
-        .subcommand(clap::SubCommand::with_name("update"))
-        .get_matches();
+    // let matches = clap::App::new("nobreak")
+    //     .arg(
+    //         clap::Arg::with_name("directory")
+    //             .help("Directory where the recorded data is stored.")
+    //             .required(true)
+    //             .index(1),
+    //     )
+    //     .arg(
+    //         clap::Arg::with_name("script")
+    //             .help("Shell script that runs the regression test suite")
+    //             .required(true)
+    //             .index(2),
+    //     )
+    //     .subcommand(clap::SubCommand::with_name("check"))
+    //     .subcommand(clap::SubCommand::with_name("update"))
+    //     .get_matches();
 
-    let operation_mode = match matches.subcommand_name() {
-        None => {
-            println!("Use a subcommand");
-            return Ok(());
-        }
-        Some(name) => match name {
-            "check" => OperationMode::Check,
-            "update" => OperationMode::Update,
-            _ => panic!(),
-        },
-    };
+    // let operation_mode = match matches.subcommand_name() {
+    //     None => {
+    //         println!("Use a subcommand");
+    //         return Ok(());
+    //     }
+    //     Some(name) => match name {
+    //         "check" => OperationMode::Check,
+    //         "update" => OperationMode::Update,
+    //         _ => panic!(),
+    //     },
+    // };
 
-    let directory_path = std::path::Path::new(matches.value_of("directory").unwrap()).to_owned();
-    let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
+    // let directory_path = std::path::Path::new(matches.value_of("directory").unwrap()).to_owned();
+    // let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
 
-    if !directory_path.exists() || !directory_path.is_dir() {
-        println!("Directory does not exist: {}", &directory_path.display());
-        return Ok(());
-    }
+    // if !directory_path.exists() || !directory_path.is_dir() {
+    //     println!("Directory does not exist: {}", &directory_path.display());
+    //     return Ok(());
+    // }
 
     let fails = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
 
     rocket::build()
         .manage(NobreakState {
-            mode: operation_mode,
-            directory: directory_path,
+            mode: OperationMode::Check,
+            directory: std::path::Path::new("").to_owned(),
             fails: fails.clone(),
         })
         .mount(
@@ -220,17 +325,18 @@ async fn main() -> anyhow::Result<()> {
                 handle_log,
                 handle_get,
                 handle_fail,
-                handle_shutdown
+                handle_shutdown,
+                handle_api,
             ],
         )
-        .attach(rocket::fairing::AdHoc::on_liftoff(
-            "Start Script",
-            move |rocket| {
-                Box::pin(async move {
-                    on_liftoff(script_path, rocket);
-                })
-            },
-        ))
+        // .attach(rocket::fairing::AdHoc::on_liftoff(
+        //     "Start Script",
+        //     move |rocket| {
+        //         Box::pin(async move {
+        //             on_liftoff(script_path, rocket);
+        //         })
+        //     },
+        // ))
         .launch()
         .await?;
 
