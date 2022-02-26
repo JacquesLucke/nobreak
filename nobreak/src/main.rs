@@ -1,4 +1,6 @@
+use anyhow::anyhow;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
+use clap::Parser;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
@@ -101,7 +103,7 @@ fn decode_request(request_buffer: &[u8]) -> anyhow::Result<RequestMessage> {
             let message = decode_str(&mut cursor)?;
             RequestType::LogFail(LogFailRequest { key, message })
         }
-        _ => return Err(anyhow::anyhow!("Invalid opcode")),
+        _ => return Err(anyhow!("Invalid opcode")),
     };
     Ok(RequestMessage { version, content })
 }
@@ -172,9 +174,7 @@ async fn handle_log_value_request(
     let path = key_to_path(&request.key, state);
     let mut builder = tokio::fs::DirBuilder::new();
     builder.recursive(true);
-    let parent_path = path
-        .parent()
-        .ok_or(anyhow::anyhow!("error creating directory"))?;
+    let parent_path = path.parent().ok_or(anyhow!("error creating directory"))?;
     builder.create(parent_path).await?;
     tokio::fs::File::create(&path)
         .await?
@@ -207,107 +207,56 @@ async fn handle_api(msg: &[u8], state: &rocket::State<NobreakState>) -> Vec<u8> 
     }
 }
 
-#[tokio::main]
-async fn execute_script(
-    script_path: &std::path::Path,
-    server_url: reqwest::Url,
-) -> anyhow::Result<()> {
-    tokio::process::Command::new("sh")
-        .arg(script_path)
-        .env("NOBREAK_SERVER_URL", server_url.to_string())
-        .spawn()
-        .expect("failed to spawn")
-        .wait()
-        .await?;
-    let client = reqwest::Client::new();
-    let shutdown_url = server_url.join("_shutdown")?;
-    client.post(shutdown_url).send().await?;
-    Ok(())
+#[rocket::get("/")]
+fn handle_index() -> &'static str {
+    "Nobreak server is active."
 }
 
-fn on_liftoff(script_path: std::path::PathBuf, rocket: &rocket::Rocket<rocket::Orbit>) {
-    let address = rocket.config().address;
-    let port = rocket.config().port;
-    let mut server_url =
-        reqwest::Url::parse(&("http://".to_owned() + &address.to_string())).unwrap();
-    server_url.set_port(Some(port)).unwrap();
-    std::thread::spawn(move || -> anyhow::Result<()> {
-        execute_script(&script_path, server_url)?;
-        Ok(())
-    });
+#[derive(Parser, Debug)]
+#[clap(version)]
+struct CliArgs {
+    #[clap(long)]
+    directory: Option<std::path::PathBuf>,
+
+    #[clap(long)]
+    #[clap(default_value_t = std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)))]
+    address: std::net::IpAddr,
+
+    #[clap(long)]
+    #[clap(default_value_t = 2345)]
+    port: u16,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let full_key: Vec<String> = vec!["test", "a", "b", "c"]
-    //     .iter()
-    //     .map(|&s| s.to_owned())
-    //     .collect();
-    // let encoded_full_key = encode_full_key(&full_key);
-    // for b in encoded_full_key.iter() {
-    //     print!("{} ", b);
-    // }
-    // println!();
-    // let decoded_full_key = decode_full_key(&encoded_full_key);
-    // for key in decoded_full_key.iter() {
-    //     print!("{}, ", key);
-    // }
-    // println!();
+    let mut cli_args = CliArgs::parse();
 
-    // let matches = clap::App::new("nobreak")
-    //     .arg(
-    //         clap::Arg::with_name("directory")
-    //             .help("Directory where the recorded data is stored.")
-    //             .required(true)
-    //             .index(1),
-    //     )
-    //     .arg(
-    //         clap::Arg::with_name("script")
-    //             .help("Shell script that runs the regression test suite")
-    //             .required(true)
-    //             .index(2),
-    //     )
-    //     .subcommand(clap::SubCommand::with_name("check"))
-    //     .subcommand(clap::SubCommand::with_name("update"))
-    //     .get_matches();
+    if cli_args.directory.is_none() {
+        let default_directory = std::env::current_dir()?.join("nobreak_data");
+        cli_args.directory = Some(default_directory);
+    }
 
-    // let operation_mode = match matches.subcommand_name() {
-    //     None => {
-    //         println!("Use a subcommand");
-    //         return Ok(());
-    //     }
-    //     Some(name) => match name {
-    //         "check" => OperationMode::Check,
-    //         "update" => OperationMode::Update,
-    //         _ => panic!(),
-    //     },
-    // };
-
-    // let directory_path = std::path::Path::new(matches.value_of("directory").unwrap()).to_owned();
-    // let script_path = std::path::Path::new(matches.value_of("script").unwrap()).to_owned();
-
-    // if !directory_path.exists() || !directory_path.is_dir() {
-    //     println!("Directory does not exist: {}", &directory_path.display());
-    //     return Ok(());
-    // }
+    println!("{:?}", cli_args);
 
     let fails = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
 
+    let config = rocket::Config {
+        port: cli_args.port,
+        address: cli_args.address,
+        ..Default::default()
+    };
+
     rocket::build()
+        .configure(config)
         .manage(NobreakState {
             mode: OperationMode::Check,
             directory: std::path::Path::new("/home/jacques/Documents/nobreak/testing").to_owned(),
             fails: fails.clone(),
         })
-        .mount("/", rocket::routes![handle_shutdown, handle_api,])
-        // .attach(rocket::fairing::AdHoc::on_liftoff(
-        //     "Start Script",
-        //     move |rocket| {
-        //         Box::pin(async move {
-        //             on_liftoff(script_path, rocket);
-        //         })
-        //     },
-        // ))
+        .mount(
+            "/",
+            rocket::routes![handle_shutdown, handle_api, handle_index],
+        )
         .launch()
         .await?;
 
