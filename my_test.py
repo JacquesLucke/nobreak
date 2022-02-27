@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import sys
-import os
 import requests
 from pprint import pprint
-import urllib.parse
 import enum
-from communicate import (
+from clients.python.communicate import (
     encode_message__status,
     encode_message__load,
     encode_message__log_value,

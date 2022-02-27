@@ -712,7 +712,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nobreak"
+name = "nobreak_server"
 version = "0.1.0"
 dependencies = [
  "anyhow",

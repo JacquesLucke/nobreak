@@ -49,7 +49,7 @@ class NobreakServer:
         self.stop()
 
 
-nobreak_path = Path("/home/jacques/Documents/nobreak/nobreak/target/debug/nobreak")
+nobreak_path = Path("/home/jacques/Documents/nobreak/server/target/debug/nobreak")
 
 with NobreakServer(nobreak_path, port=6002) as server:
     print(server)
