@@ -23,6 +23,7 @@ impl std::fmt::Display for FailInfo {
 }
 
 struct NobreakState {
+    cli_args: CliArgs,
     mode: OperationMode,
     directory: std::path::PathBuf,
     fails: std::sync::Arc<std::sync::Mutex<Vec<FailInfo>>>,
@@ -212,6 +213,11 @@ fn handle_index() -> &'static str {
     "Nobreak server is active."
 }
 
+#[rocket::get("/server_id")]
+fn handle_server_id(state: &rocket::State<NobreakState>) -> String {
+    state.cli_args.server_id.to_string()
+}
+
 #[derive(Parser, Debug)]
 #[clap(version)]
 struct CliArgs {
@@ -225,6 +231,10 @@ struct CliArgs {
     #[clap(long)]
     #[clap(default_value_t = 2345)]
     port: u16,
+
+    #[clap(long)]
+    #[clap(default_value_t = 0)]
+    server_id: u32,
 }
 
 #[tokio::main]
@@ -249,13 +259,14 @@ async fn main() -> anyhow::Result<()> {
     rocket::build()
         .configure(config)
         .manage(NobreakState {
+            cli_args: cli_args,
             mode: OperationMode::Check,
             directory: std::path::Path::new("/home/jacques/Documents/nobreak/testing").to_owned(),
             fails: fails.clone(),
         })
         .mount(
             "/",
-            rocket::routes![handle_shutdown, handle_api, handle_index],
+            rocket::routes![handle_shutdown, handle_api, handle_index, handle_server_id],
         )
         .launch()
         .await?;
