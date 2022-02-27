@@ -3,7 +3,7 @@ from __future__ import annotations
 import requests
 from pprint import pprint
 import enum
-from clients.python.communicate import (
+from . communicate import (
     encode_message__status,
     encode_message__load,
     encode_message__log_value,
@@ -57,14 +57,3 @@ class NobreakClient:
 
     def sub(self, sub_key: str) -> NobreakClient | None:
         return NobreakClient(self.connection, self.parent_key + [sub_key])
-
-connection = NobreakConnection("http://127.0.0.1:8000/api")
-client = NobreakClient(connection)
-
-client.log("A", b"aa")
-client.log("B", b"bb")
-client.log("C", b"cc")
-
-if sub_client := client.sub("D"):
-    sub_client.log("E", b"ee")
-    sub_client.log("F", b"ff")

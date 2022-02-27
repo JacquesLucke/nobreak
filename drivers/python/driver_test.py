@@ -48,9 +48,6 @@ class NobreakServer:
     def __exit__(self, type, value, traceback):
         self.stop()
 
-
-nobreak_path = Path("/home/jacques/Documents/nobreak/server/target/debug/nobreak")
-
-with NobreakServer(nobreak_path, port=6002) as server:
-    print(server)
-    time.sleep(10)
+    @property
+    def api_url(self):
+        return self._url + "/api"
