@@ -34,7 +34,10 @@ class Client:
 
     def get(self, key: list[str]) -> bytes | None:
         response = requests.get(self._server_url, data=encode_message__load(key))
-        return "test"
+        success = response.content[0]
+        if success:
+            return response.content[1:]
+        return None
 
     def fail(self, key: list[str], msg: str):
         requests.get(self._server_url, data=encode_message__log_fail(key, msg))

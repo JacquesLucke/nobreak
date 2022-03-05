@@ -146,7 +146,7 @@ fn key_to_path(key: &Key, state: &NobreakState) -> std::path::PathBuf {
 async fn answer_load_request(request: LoadRequest, state: &NobreakState) -> Vec<u8> {
     match handle_load_request(request, state).await {
         Ok(value) => value,
-        Err(_) => vec![],
+        Err(_) => vec![0],
     }
 }
 
@@ -156,7 +156,7 @@ async fn handle_load_request(
 ) -> anyhow::Result<Vec<u8>> {
     let path = key_to_path(&request.key, state);
     let mut file = tokio::fs::File::open(path).await?;
-    let mut contents = vec![];
+    let mut contents = vec![1];
     file.read_buf(&mut contents).await?;
     Ok(contents)
 }
