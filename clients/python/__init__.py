@@ -1,2 +1,2 @@
-from . client import NobreakClient
-from . tester import NobreakTester
+from .client import NobreakClient
+from .tester import NobreakTester

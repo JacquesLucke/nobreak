@@ -1,7 +1,10 @@
 from drivers.python.driver_test import NobreakServer
 from clients.python import NobreakClient, NobreakTester
 
-nobreak_binary_path = "/home/jacques/Documents/nobreak/server/target/debug/nobreak_server"
+nobreak_binary_path = (
+    "/home/jacques/Documents/nobreak/server/target/debug/nobreak_server"
+)
+
 
 with NobreakServer(nobreak_binary_path) as server:
     client = NobreakClient(server.api_url)

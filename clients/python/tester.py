@@ -1,5 +1,6 @@
 from __future__ import annotations
-from . client import NobreakClient, NobreakOperationMode
+from .client import NobreakClient, NobreakOperationMode
+
 
 class NobreakTester:
     def __init__(self, client: NobreakClient, parent_key: list[str] | None = None):

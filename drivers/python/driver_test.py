@@ -5,12 +5,15 @@ import time
 import random
 import requests
 
+
 class NobreakServer:
-    def __init__(self,
-            nobreak_binary_path: PathLike,
-            *,
-            port: int = 2345,
-            address: str = "127.0.0.1"):
+    def __init__(
+        self,
+        nobreak_binary_path: PathLike,
+        *,
+        port: int = 2345,
+        address: str = "127.0.0.1",
+    ):
         self._args = []
         self._args.append(nobreak_binary_path)
         self._args.extend(["--port", str(port)])

@@ -3,7 +3,7 @@ from __future__ import annotations
 import requests
 from pprint import pprint
 import enum
-from . communicate import (
+from .communicate import (
     encode_message__status,
     encode_message__load,
     encode_message__log_value,
@@ -11,9 +11,11 @@ from . communicate import (
     encode_message__log_fail,
 )
 
+
 class NobreakOperationMode(enum.Enum):
     UPDATE = enum.auto()
     CHECK = enum.auto()
+
 
 class NobreakClient:
     def __init__(self, server_url: str):
@@ -33,4 +35,3 @@ class NobreakClient:
 
     def fail(self, key: list[str], msg: str):
         requests.get(self._server_url, data=encode_message__log_fail(key, msg))
-
