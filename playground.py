@@ -17,8 +17,10 @@ with NobreakServer(nobreak_binary_path) as server:
     client = NobreakClient(server.api_url)
     tester = NobreakTester(client)
 
-    tester.test("QWE", b"asd")
-    tester.test("lala", b"test")
+    tester.test("QWE", 4)
+    tester.test("lala", -6)
+    tester.test("fas", b"my_bytes")
+    tester.test("vxc", 4.1)
 
     if sub_tester := tester.sub("D"):
-        sub_tester.test("E", b"qwe")
+        sub_tester.test("E", "qwe")
