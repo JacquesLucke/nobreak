@@ -1,5 +1,5 @@
 from drivers.python.driver_test import NobreakServer
-from clients.python.client import NobreakClient, NobreakTester
+from clients.python import NobreakClient, NobreakTester
 
 nobreak_binary_path = "/home/jacques/Documents/nobreak/server/target/debug/nobreak_server"
 
