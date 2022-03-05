@@ -18,13 +18,16 @@ class OperationMode(enum.Enum):
 
 
 class Client:
-    def __init__(self, server_url: str):
-        self._server_url = server_url
-
+    def __init__(self, server_url: str, mode: str | OperationMode):
         response = requests.get(server_url, data=encode_message__status())
         if response.status_code != 200:
             raise ConnectionError("Could not connect to nobreak server.")
-        self.operation_mode = OperationMode.UPDATE
+
+        self._server_url = server_url
+
+        if isinstance(mode, str):
+            mode = OperationMode[mode]
+        self._mode = mode
 
     def log(self, key: list[str], value: bytes):
         requests.get(self._server_url, data=encode_message__log_value(key, value))

@@ -14,7 +14,7 @@ nobreak_binary_path = (
 
 
 with NobreakServer(nobreak_binary_path) as server:
-    client = nobreak.Client(server.api_url)
+    client = nobreak.Client(server.api_url, "UPDATE")
     tester = nobreak.Tester(client)
 
     tester.test("QWE", 4)

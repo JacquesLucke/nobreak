@@ -20,10 +20,10 @@ class Tester:
                 )
 
         key = self.parent_key + [sub_key]
-        if self.client.operation_mode == OperationMode.UPDATE:
+        if self.client._mode == OperationMode.UPDATE:
             value_bytes = value_handler.serialize(value)
             self.client.log(key, value_bytes)
-        elif self.client.operation_mode == OperationMode.CHECK:
+        elif self.client._mode == OperationMode.CHECK:
             stored_value = self.client.get(key)
             if stored_value is None:
                 print("Value was not stored")
