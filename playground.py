@@ -1,4 +1,4 @@
-from drivers.python.driver_test import NobreakServer
+from drivers.python import NobreakServer
 from clients.python import NobreakClient, NobreakTester
 
 nobreak_binary_path = (
