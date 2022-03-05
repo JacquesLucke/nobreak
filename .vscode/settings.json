@@ -1,4 +1,12 @@
 {
     "python.formatting.provider": "black",
     "editor.formatOnSave": true,
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/clients/python",
+        "${workspaceFolder}/drivers/python",
+    ],
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/clients/python",
+        "${workspaceFolder}/drivers/python"
+    ]
 }
