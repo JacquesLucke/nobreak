@@ -1,14 +1,14 @@
 from drivers.python.driver_test import NobreakServer
-from clients.python.client import NobreakConnection, NobreakClient
+from clients.python.client import NobreakClient, NobreakTester
 
 nobreak_binary_path = "/home/jacques/Documents/nobreak/server/target/debug/nobreak_server"
 
 with NobreakServer(nobreak_binary_path) as server:
-    connection = NobreakConnection(server.api_url)
-    client = NobreakClient(connection)
+    client = NobreakClient(server.api_url)
+    tester = NobreakTester(client)
 
-    client.log("QWE", b"asd")
-    client.log("lala", b"test")
+    tester.test("QWE", b"asd")
+    tester.test("lala", b"test")
 
-    if sub_client := client.sub("D"):
-        sub_client.log("E", b"qwe")
+    if sub_tester := tester.sub("D"):
+        sub_tester.test("E", b"qwe")

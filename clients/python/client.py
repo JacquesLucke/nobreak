@@ -15,7 +15,7 @@ class NobreakOperationMode(enum.Enum):
     UPDATE = enum.auto()
     CHECK = enum.auto()
 
-class NobreakConnection:
+class NobreakClient:
     def __init__(self, server_url: str):
         self._server_url = server_url
 
@@ -34,26 +34,26 @@ class NobreakConnection:
     def fail(self, key: list[str], msg: str):
         requests.get(self._server_url, data=encode_message__log_fail(key, msg))
 
-class NobreakClient:
-    def __init__(self, connection: NobreakConnection, parent_key: list[str] | None = None):
-        self.connection = connection
+class NobreakTester:
+    def __init__(self, client: NobreakClient, parent_key: list[str] | None = None):
+        self.client = client
         self.parent_key = [] if parent_key is None else parent_key
 
-    def log(self, sub_key: str, value: bytes):
+    def test(self, sub_key: str, value: bytes):
         key = self.parent_key + [sub_key]
-        if self.connection.operation_mode == NobreakOperationMode.UPDATE:
-            self.connection.log(key, value)
-        elif self.connection.operation_mode == NobreakOperationMode.CHECK:
-            stored_value = self.connection.get(key)
+        if self.client.operation_mode == NobreakOperationMode.UPDATE:
+            self.client.log(key, value)
+        elif self.client.operation_mode == NobreakOperationMode.CHECK:
+            stored_value = self.client.get(key)
             if stored_value is None:
                 print("Value was not stored")
             elif value == stored_value:
                 print("Equal:", sub_key, value)
             else:
                 print("Not Equal:", sub_key, value, stored_value)
-                self.connection.fail(key, f"{value} != {stored_value}")
+                self.client.fail(key, f"{value} != {stored_value}")
         else:
             raise RuntimeError("Unknown nobreak operation mode.")
 
-    def sub(self, sub_key: str) -> NobreakClient | None:
-        return NobreakClient(self.connection, self.parent_key + [sub_key])
+    def sub(self, sub_key: str) -> NobreakTester | None:
+        return NobreakTester(self.client, self.parent_key + [sub_key])
