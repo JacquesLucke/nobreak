@@ -5,8 +5,8 @@ sys.path.append(str(Path(__file__).parent / "drivers" / "python"))
 sys.path.append(str(Path(__file__).parent / "clients" / "python"))
 
 
+import nobreak
 from nobreak_driver import NobreakServer
-from nobreak_client import NobreakClient, NobreakTester
 
 nobreak_binary_path = (
     "/home/jacques/Documents/nobreak/server/target/debug/nobreak_server"
@@ -14,8 +14,8 @@ nobreak_binary_path = (
 
 
 with NobreakServer(nobreak_binary_path) as server:
-    client = NobreakClient(server.api_url)
-    tester = NobreakTester(client)
+    client = nobreak.Client(server.api_url)
+    tester = nobreak.Tester(client)
 
     tester.test("QWE", 4)
     tester.test("lala", -6)

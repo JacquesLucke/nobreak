@@ -1,11 +1,11 @@
 from __future__ import annotations
-from .client import NobreakClient, NobreakOperationMode
+from .client import Client, OperationMode
 from .value_handler import ValueHandler, SuccessCompareResult, FailCompareResult
 from .default_value_handlers import get_default_value_handler
 
 
-class NobreakTester:
-    def __init__(self, client: NobreakClient, parent_key: list[str] | None = None):
+class Tester:
+    def __init__(self, client: Client, parent_key: list[str] | None = None):
         self.client = client
         self.parent_key = [] if parent_key is None else parent_key
 
@@ -20,10 +20,10 @@ class NobreakTester:
                 )
 
         key = self.parent_key + [sub_key]
-        if self.client.operation_mode == NobreakOperationMode.UPDATE:
+        if self.client.operation_mode == OperationMode.UPDATE:
             value_bytes = value_handler.serialize(value)
             self.client.log(key, value_bytes)
-        elif self.client.operation_mode == NobreakOperationMode.CHECK:
+        elif self.client.operation_mode == OperationMode.CHECK:
             stored_value = self.client.get(key)
             if stored_value is None:
                 print("Value was not stored")
@@ -41,5 +41,5 @@ class NobreakTester:
         else:
             raise RuntimeError("Unknown nobreak operation mode.")
 
-    def sub(self, sub_key: str) -> NobreakTester | None:
-        return NobreakTester(self.client, self.parent_key + [sub_key])
+    def sub(self, sub_key: str) -> Tester | None:
+        return Tester(self.client, self.parent_key + [sub_key])

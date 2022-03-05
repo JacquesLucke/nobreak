@@ -12,19 +12,19 @@ from .communicate import (
 )
 
 
-class NobreakOperationMode(enum.Enum):
+class OperationMode(enum.Enum):
     UPDATE = enum.auto()
     CHECK = enum.auto()
 
 
-class NobreakClient:
+class Client:
     def __init__(self, server_url: str):
         self._server_url = server_url
 
         response = requests.get(server_url, data=encode_message__status())
         if response.status_code != 200:
             raise ConnectionError("Could not connect to nobreak server.")
-        self.operation_mode = NobreakOperationMode.UPDATE
+        self.operation_mode = OperationMode.UPDATE
 
     def log(self, key: list[str], value: bytes):
         requests.get(self._server_url, data=encode_message__log_value(key, value))
