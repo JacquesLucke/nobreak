@@ -4,27 +4,20 @@ use clap::Parser;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-#[derive(serde::Serialize, Clone, Copy)]
-enum OperationMode {
-    Update,
-    Check,
-}
-
-#[derive(Clone, Debug)]
+#[derive(Debug, serde::Serialize)]
 struct FailInfo {
-    key: String,
-    msg: String,
+    key: Key,
+    message: String,
 }
 
 impl std::fmt::Display for FailInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "<{}: {}>", self.key, self.msg)
+        write!(f, "<{:?}: {:?}>", self.key, self.message)
     }
 }
 
 struct NobreakState {
     cli_args: CliArgs,
-    mode: OperationMode,
     directory: std::path::PathBuf,
     fails: std::sync::Arc<std::sync::Mutex<Vec<FailInfo>>>,
 }
@@ -35,7 +28,7 @@ fn handle_shutdown(shutdown: rocket::Shutdown) -> &'static str {
     "Shutdown"
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 struct Key {
     sub_keys: Vec<String>,
 }
@@ -188,8 +181,25 @@ async fn answer_log_success_request(request: LogSuccessRequest) -> Vec<u8> {
     vec![b'F']
 }
 
-async fn answer_log_fail_request(request: LogFailRequest) -> Vec<u8> {
-    vec![b'G']
+async fn answer_log_fail_request(
+    request: LogFailRequest,
+    state: &rocket::State<NobreakState>,
+) -> Vec<u8> {
+    match handle_log_fail_request(&request, state).await {
+        Ok(_) => vec![],
+        Err(_) => vec![],
+    }
+}
+
+async fn handle_log_fail_request(
+    request: &LogFailRequest,
+    state: &rocket::State<NobreakState>,
+) -> anyhow::Result<()> {
+    state.fails.lock().unwrap().push(FailInfo {
+        key: request.key.clone(),
+        message: request.message.clone(),
+    });
+    Ok(())
 }
 
 #[rocket::get("/api", data = "<msg>")]
@@ -204,7 +214,7 @@ async fn handle_api(msg: &[u8], state: &rocket::State<NobreakState>) -> Vec<u8> 
         RequestType::Load(request) => answer_load_request(request, state).await,
         RequestType::LogValue(request) => answer_log_value_request(request, state).await,
         RequestType::LogSuccess(request) => answer_log_success_request(request).await,
-        RequestType::LogFail(request) => answer_log_fail_request(request).await,
+        RequestType::LogFail(request) => answer_log_fail_request(request, state).await,
     }
 }
 
@@ -216,6 +226,12 @@ fn handle_index() -> &'static str {
 #[rocket::get("/server_id")]
 fn handle_server_id(state: &rocket::State<NobreakState>) -> String {
     state.cli_args.server_id.to_string()
+}
+
+#[rocket::get("/log")]
+fn handle_log(state: &rocket::State<NobreakState>) -> String {
+    let fails: &Vec<FailInfo> = &state.fails.lock().unwrap();
+    serde_json::to_string(&fails).unwrap()
 }
 
 #[derive(Parser, Debug)]
@@ -260,13 +276,18 @@ async fn main() -> anyhow::Result<()> {
         .configure(config)
         .manage(NobreakState {
             cli_args: cli_args,
-            mode: OperationMode::Check,
             directory: std::path::Path::new("/home/jacques/Documents/nobreak/testing").to_owned(),
             fails: fails.clone(),
         })
         .mount(
             "/",
-            rocket::routes![handle_shutdown, handle_api, handle_index, handle_server_id],
+            rocket::routes![
+                handle_shutdown,
+                handle_api,
+                handle_index,
+                handle_server_id,
+                handle_log
+            ],
         )
         .launch()
         .await?;

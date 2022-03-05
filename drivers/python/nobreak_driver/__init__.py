@@ -54,3 +54,6 @@ class NobreakServer:
     @property
     def api_url(self):
         return self._url + "/api"
+
+    def load_log(self):
+        return requests.get(self._url + "/log").json()

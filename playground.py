@@ -14,13 +14,15 @@ nobreak_binary_path = (
 
 
 with NobreakServer(nobreak_binary_path) as server:
-    client = nobreak.Client(server.api_url, "CHECK")
+    client = nobreak.Client(server.api_url, "UPDATE")
     tester = nobreak.Tester(client)
 
-    tester.test("QWE", 4)
+    tester.test("QWE", 5)
     tester.test("lala", -6)
     tester.test("fas", b"my_bytes")
     tester.test("vxc", 4.1)
 
     if sub_tester := tester.sub("D"):
         sub_tester.test("E", "qwe")
+
+    print(server.load_log())
