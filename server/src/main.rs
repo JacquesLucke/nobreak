@@ -102,24 +102,24 @@ fn decode_request(request_buffer: &[u8]) -> anyhow::Result<RequestMessage> {
     Ok(RequestMessage { version, content })
 }
 
-fn decode_key(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<Key> {
+fn decode_key<R: std::io::Read>(mut src: &mut R) -> anyhow::Result<Key> {
     let mut key = Key { sub_keys: vec![] };
-    let amount = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor)?;
+    let amount = ReadBytesExt::read_u32::<NetworkEndian>(&mut src)?;
     for _ in 0..amount {
-        key.sub_keys.push(decode_str(&mut cursor)?);
+        key.sub_keys.push(decode_str(&mut src)?);
     }
     Ok(key)
 }
 
-fn decode_bytes(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<Vec<u8>> {
-    let size = ReadBytesExt::read_u32::<NetworkEndian>(&mut cursor)?;
+fn decode_bytes<R: std::io::Read>(mut src: &mut R) -> anyhow::Result<Vec<u8>> {
+    let size = ReadBytesExt::read_u32::<NetworkEndian>(&mut src)?;
     let mut buffer = vec![0; size as usize];
-    std::io::Read::read_exact(&mut cursor, &mut buffer)?;
+    std::io::Read::read_exact(&mut src, &mut buffer)?;
     Ok(buffer)
 }
 
-fn decode_str(mut cursor: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<String> {
-    let bytes = decode_bytes(&mut cursor)?;
+fn decode_str<R: std::io::Read>(mut src: &mut R) -> anyhow::Result<String> {
+    let bytes = decode_bytes(&mut src)?;
     Ok(String::from_utf8(bytes)?)
 }
 
