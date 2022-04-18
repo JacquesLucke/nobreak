@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{NetworkEndian, ReadBytesExt};
 use clap::Parser;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -177,7 +177,7 @@ async fn handle_log_value_request(
     Ok(())
 }
 
-async fn answer_log_success_request(request: LogSuccessRequest) -> Vec<u8> {
+async fn answer_log_success_request(_request: LogSuccessRequest) -> Vec<u8> {
     vec![b'F']
 }
 
